@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Modelado dimensional: cómo diseñar datos que respondan preguntas de negocio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --fondo: #F5F8FC;
+  --plano: #FFFFFF;
+  --tinta: #1C2733;
+  --tinta-suave: #5A6B7D;
+  --azul: #2357A6;
+  --reticula: #E3EAF3;
+  --ambar: #B87A00;
+  --rojo: #B83A25;
+  --borde: #D5DEE9;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --fondo: #121A24; --plano: #18222F; --tinta: #E6EDF5; --tinta-suave: #9AAABB;
+    --azul: #7FA9E8; --reticula: #1F2B3A; --ambar: #E3B341; --rojo: #EE7B66; --borde: #2A394B;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --fondo: #121A24; --plano: #18222F; --tinta: #E6EDF5; --tinta-suave: #9AAABB;
+  --azul: #7FA9E8; --reticula: #1F2B3A; --ambar: #E3B341; --rojo: #EE7B66; --borde: #2A394B;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--fondo); color: var(--tinta);
+  font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  display: grid; grid-template-columns: 300px 1fr; height: 100%;
+}
+/* Riel de agenda: altura de cada bloque proporcional a sus minutos */
+nav {
+  border-right: 1px solid var(--borde); background: var(--plano);
+  display: flex; flex-direction: column; padding: 20px 16px; gap: 14px; overflow-y: auto;
+}
+nav h1 { font-size: 1.05rem; line-height: 1.35; margin: 0; font-weight: 600; }
+.reloj-total { font-size: .85rem; color: var(--tinta-suave); }
+.riel { display: flex; flex-direction: column; gap: 4px; flex: 1; min-height: 360px; }
+.bloque {
+  all: unset; cursor: pointer; position: relative; border-radius: 4px;
+  border-left: 3px solid var(--borde); padding: 6px 10px; overflow: hidden;
+  font-size: .85rem; line-height: 1.3; color: var(--tinta-suave);
+}
+.bloque:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
+.bloque .relleno { position: absolute; inset: 0; width: 0; background: var(--reticula); z-index: 0; }
+.bloque span { position: relative; z-index: 1; display: block; }
+.bloque .min { font-size: .75rem; }
+.bloque.activo { border-left-color: var(--azul); color: var(--tinta); font-weight: 500; }
+.bloque.sin-tiempo { flex: 0 0 auto !important; }
+/* Escenario con retícula tipo plano técnico */
+main {
+  overflow-y: auto; padding: 40px 6vw 120px;
+  background-image:
+    linear-gradient(var(--reticula) 1px, transparent 1px),
+    linear-gradient(90deg, var(--reticula) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+.lamina {
+  display: none; max-width: 980px; margin: 0 auto; background: var(--plano);
+  border: 1px solid var(--borde); border-radius: 6px; padding: 40px 48px;
+}
+.lamina.visible { display: block; }
+.lamina h1, .lamina h2 { font-size: 2rem; line-height: 1.2; margin: 0 0 24px; font-weight: 600; }
+.lamina h3 { font-size: 1.3rem; margin: 32px 0 12px; font-weight: 600; color: var(--azul); }
+.lamina p, .lamina li { font-size: 1.15rem; line-height: 1.6; max-width: 72ch; }
+.lamina table { border-collapse: collapse; margin: 20px 0; font-size: 1rem; display: block; overflow-x: auto; }
+.lamina th, .lamina td { border: 1px solid var(--borde); padding: 8px 12px; text-align: left; vertical-align: top; }
+.lamina th { background: var(--reticula); font-weight: 600; }
+.lamina code { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .92em; }
+.lamina pre:not(.mermaid) { background: var(--reticula); padding: 14px; border-radius: 4px; overflow-x: auto; }
+.lamina pre.mermaid { background: transparent; text-align: center; overflow-x: auto; margin: 28px 0; }
+.lamina blockquote { border-left: 3px solid var(--azul); margin: 20px 0; padding: 4px 18px; color: var(--tinta-suave); }
+body:not(.ver-docente) .solo-docente { display: none; }
+.docente { border: 1px dashed var(--ambar); border-radius: 4px; padding: 12px 18px; margin-top: 24px; }
+/* Barra inferior */
+footer {
+  position: fixed; left: 300px; right: 0; bottom: 0; display: flex; align-items: center; gap: 16px;
+  padding: 12px 24px calc(12px + env(safe-area-inset-bottom, 0px));
+  background: var(--plano); border-top: 1px solid var(--borde);
+}
+footer button {
+  font: inherit; font-size: .95rem; padding: 8px 16px; border-radius: 4px;
+  border: 1px solid var(--borde); background: var(--plano); color: var(--tinta); cursor: pointer;
+}
+footer button:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
+footer button.primario { background: var(--azul); border-color: var(--azul); color: var(--plano); }
+.cronometro { font-variant-numeric: tabular-nums; font-size: 1.6rem; font-weight: 600; min-width: 5ch; }
+.cronometro.poco { color: var(--ambar); }
+.cronometro.excedido { color: var(--rojo); }
+.espacio { flex: 1; }
+.posicion { color: var(--tinta-suave); font-size: .9rem; }
+@media (max-width: 800px) {
+  body { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  nav { border-right: 0; border-bottom: 1px solid var(--borde); max-height: 30vh; }
+  .riel { min-height: 0; }
+  .bloque { flex: 0 0 auto !important; }
+  footer { left: 0; }
+  .lamina { padding: 24px; }
+}
+@media (prefers-reduced-motion: no-preference) { .bloque .relleno { transition: width .5s linear; } }
+</style>
+</head>
+<body>
+<nav aria-label="Agenda de la clase">
+  <h1 id="titulo-nav"></h1>
+  <div class="reloj-total" id="reloj-total"></div>
+  <div class="riel" id="riel"></div>
+  <button class="bloque sin-tiempo" id="modo-docente" aria-pressed="false"><span>Mostrar notas del docente</span></button>
+</nav>
+<main id="escenario"></main>
+<footer>
+  <button id="anterior" aria-label="Lámina anterior">Anterior</button>
+  <button id="siguiente" class="primario" aria-label="Lámina siguiente">Siguiente</button>
+  <span class="posicion" id="posicion"></span>
+  <span class="espacio"></span>
+  <span class="cronometro" id="cronometro" aria-live="off">--:--</span>
+  <button id="iniciar">Iniciar bloque</button>
+  <button id="reiniciar">Reiniciar</button>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<script>
+const GUIA_MD = "# Modelado dimensional: cómo diseñar datos que respondan preguntas de negocio\n\n## Ficha de la clase\n\n| Campo | Detalle |\n|---|---|\n| Tema | Modelado dimensional: hechos, dimensiones y esquema estrella |\n| Duración | 90 minutos |\n| Nivel | Intermedio |\n| Conocimientos previos | SQL básico (SELECT, JOIN, GROUP BY); diferencia entre OLTP y OLAP |\n| Materiales | Proyector, pizarra o tablero colaborativo, enunciado del ejercicio impreso o compartido |\n\n## Objetivos de aprendizaje\n\nAl terminar la clase, cada participante podrá:\n\n1. Explicar por qué un modelo normalizado (3FN) dificulta el análisis y cómo el modelo dimensional lo resuelve.\n2. Distinguir en un caso de negocio qué datos son hechos (medidas) y cuáles son dimensiones (contexto).\n3. Diseñar un esquema estrella a partir de un proceso de negocio, definiendo explícitamente su granularidad.\n4. Decidir entre esquema estrella y copo de nieve según el caso, justificando el costo de cada opción.\n\n## Agenda\n\n| Bloque | Minutos | Actividad | Propósito |\n|---|---|---|---|\n| 1. Apertura | 10 | Caso del reporte que nadie entiende | Generar la necesidad |\n| 2. Intuición | 15 | Analogía del ticket de supermercado | Anclar en lo conocido |\n| 3. Profundidad | 25 | Hechos, dimensiones, granularidad, estrella vs copo | Construir el modelo mental |\n| 4. Práctica | 25 | Diseño en grupos de un esquema estrella | Aplicar y decidir |\n| 5. Errores | 5 | Antipatrones frecuentes | Prevenir fallos reales |\n| 6. Cierre | 10 | Ronda Feynman y verificación | Consolidar y comprobar |\n\n## 1. Apertura: el problema (10 min)\n\nUna cadena de farmacias con 120 locales quiere saber: *¿cuánto vendimos por categoría de producto, por región y por mes, comparado con el año anterior?*\n\nEl sistema transaccional (ERP) guarda los datos en más de 40 tablas normalizadas: `factura`, `detalle_factura`, `producto`, `subcategoria`, `categoria`, `local`, `ciudad`, `provincia`, `region`, `cliente`… La consulta que responde esa pregunta tiene 9 JOIN, tarda 14 minutos y, cuando la ejecutan dos analistas distintos, los totales no coinciden porque uno filtró las facturas anuladas y el otro no.\n\n**Pregunta detonante para el grupo:** *¿Alguna vez un reporte de su empresa dio números distintos según quién lo hizo? ¿Por qué creen que pasó?*\n\nRecoge 2 o 3 respuestas. El objetivo es que el grupo llegue a la idea de que el problema no es el SQL, sino que el modelo de datos fue diseñado para *registrar* transacciones, no para *analizarlas*.\n\n## 2. Construyendo la intuición (15 min)\n\n### La analogía: el ticket de supermercado\n\nPiensa en un ticket de compra. Tiene números que se pueden sumar (cantidad, precio, total) y alrededor de esos números hay contexto que responde preguntas: *¿cuándo?* (fecha y hora), *¿dónde?* (local), *¿qué?* (producto), *¿quién?* (cliente, cajero).\n\n- Los **números sumables** son los **hechos**.\n- Las **preguntas de contexto** (cuándo, dónde, qué, quién) son las **dimensiones**.\n\nEl modelo dimensional organiza los datos exactamente así: una tabla central con los números y, alrededor, tablas con el contexto por el que queremos filtrar y agrupar.\n\n```mermaid\nflowchart LR\n    Q1[\"¿Cuándo?\"] --> H((\"Venta<br/>cantidad, monto\"))\n    Q2[\"¿Dónde?\"] --> H\n    Q3[\"¿Qué?\"] --> H\n    Q4[\"¿Quién?\"] --> H\n```\n\nObserva que todas las preguntas apuntan al mismo evento central: la venta. Esa es la forma de \"estrella\".\n\n**Dónde falla la analogía:** un ticket es un documento completo, pero en el modelo dimensional hay que decidir qué representa *una fila* de la tabla de hechos: ¿el ticket entero o cada producto del ticket? Esa decisión, la **granularidad**, es la más importante del diseño y la veremos a continuación.\n\n## 3. El concepto en profundidad (25 min)\n\n### Los componentes\n\n- **Tabla de hechos:** registra eventos medibles del negocio. Contiene medidas numéricas (monto, cantidad, costo) y claves que apuntan a las dimensiones. Suele ser larga (millones de filas) y angosta.\n- **Tablas de dimensión:** describen el contexto. Contienen atributos descriptivos (nombre del producto, categoría, región, día de la semana). Son anchas y relativamente cortas.\n- **Granularidad (grain):** la definición exacta de qué representa una fila de hechos. Ejemplo: *\"una fila por cada producto vendido en cada factura\"*. Se define **antes** de elegir medidas y dimensiones.\n- **Clave subrogada:** identificador numérico propio del data warehouse (por ejemplo `id_producto_dw`), independiente del código del sistema origen. Permite manejar historia y cambios de sistema.\n\n### El esquema estrella del caso\n\n```mermaid\nerDiagram\n    FACT_VENTAS }o--|| DIM_FECHA : \"cuándo\"\n    FACT_VENTAS }o--|| DIM_PRODUCTO : \"qué\"\n    FACT_VENTAS }o--|| DIM_LOCAL : \"dónde\"\n    FACT_VENTAS }o--|| DIM_CLIENTE : \"quién\"\n    FACT_VENTAS {\n        int id_fecha\n        int id_producto\n        int id_local\n        int id_cliente\n        decimal cantidad\n        decimal monto_neto\n        decimal costo\n    }\n    DIM_PRODUCTO {\n        int id_producto\n        string nombre\n        string subcategoria\n        string categoria\n    }\n    DIM_LOCAL {\n        int id_local\n        string nombre\n        string ciudad\n        string region\n    }\n```\n\nObserva que `DIM_PRODUCTO` contiene subcategoría y categoría en la misma tabla: se desnormalizó a propósito. Ahora la pregunta del inicio necesita solo 3 JOIN y cualquier analista obtiene el mismo resultado.\n\n### El proceso de diseño en cuatro pasos (Kimball)\n\n```mermaid\nflowchart LR\n    A[\"1. Elegir el<br/>proceso de negocio\"] --> B[\"2. Declarar la<br/>granularidad\"]\n    B --> C[\"3. Identificar<br/>dimensiones\"]\n    C --> D[\"4. Identificar<br/>hechos (medidas)\"]\n```\n\nEl orden importa: si eliges las medidas antes de la granularidad, terminarás mezclando datos de distinto nivel (por ejemplo, el total de la factura junto al monto de cada producto) y sumando de más.\n\n### Estrella vs copo de nieve\n\n| Criterio | Esquema estrella | Copo de nieve |\n|---|---|---|\n| Estructura | Dimensiones desnormalizadas, una tabla por dimensión | Dimensiones normalizadas en varias tablas (producto → subcategoría → categoría) |\n| Facilidad de consulta | Alta: pocos JOIN, intuitivo para analistas y herramientas de BI | Menor: más JOIN, más difícil de entender |\n| Rendimiento analítico | Generalmente mejor | Puede ser menor por los JOIN adicionales |\n| Almacenamiento | Repite datos en las dimensiones | Ahorra espacio |\n| Cuándo usarlo | La opción por defecto para analítica y BI | Dimensiones enormes con jerarquías que cambian a menudo, o reglas corporativas que lo exigen |\n| Costo o riesgo | Más esfuerzo en el proceso de carga para mantener la desnormalización | Modelos difíciles de usar que terminan evitándose |\n\n### En la industria\n\nEste modelo, popularizado por Ralph Kimball en *The Data Warehouse Toolkit*, sigue siendo la base de la capa de consumo en la mayoría de plataformas analíticas actuales. En un data warehouse en la nube como Snowflake, BigQuery o Amazon Redshift, o en la capa *gold* de un lakehouse sobre Databricks, los equipos construyen tablas `fact_` y `dim_` con herramientas de transformación como dbt, y las exponen a Power BI, Tableau o Looker. Power BI, por ejemplo, está optimizado para trabajar con modelos en estrella; sus guías de modelado lo recomiendan explícitamente. El almacenamiento barato de la nube redujo el argumento a favor del copo de nieve basado en ahorrar espacio, por lo que hoy la estrella es todavía más claramente la opción por defecto.\n\n## 4. Práctica activa (25 min)\n\n### Enunciado\n\nFormen grupos de 3 o 4 personas. Una empresa de transporte interprovincial de pasajeros quiere analizar:\n\n- Ingresos por ruta, por mes y por tipo de bus.\n- Ocupación promedio de los viajes.\n- Qué canal de venta (ventanilla, web, app) genera más boletos por ruta.\n\nEl sistema origen registra cada **boleto vendido** con: fecha de venta, fecha del viaje, ruta (origen y destino), bus (placa, tipo, capacidad), canal, precio pagado y descuento aplicado.\n\n### Entregable (15 min de trabajo, 10 min de puesta en común)\n\n1. Granularidad declarada en una frase.\n2. Lista de dimensiones con 3 atributos cada una.\n3. Lista de medidas de la tabla de hechos.\n4. El esquema dibujado en pizarra o tablero.\n5. Una decisión justificada: ¿cómo calcularían la ocupación?\n\n### Solución de referencia (para el docente)\n\n- **Granularidad:** una fila por cada boleto vendido.\n- **Dimensiones:** `dim_fecha` usada dos veces con distinto rol (fecha de venta y fecha de viaje: *role-playing dimension*); `dim_ruta` (origen, destino, distancia en km); `dim_bus` (placa, tipo, capacidad); `dim_canal` (nombre, tipo: presencial o digital).\n- **Medidas:** precio pagado, descuento, cantidad de boletos (siempre 1, útil para contar).\n- **Ocupación:** es la pregunta trampa. No se puede sumar desde la tabla de boletos, porque la capacidad del bus es un atributo del viaje, no del boleto. La solución sólida es una segunda tabla de hechos con granularidad *una fila por viaje* (`fact_viajes`) con boletos vendidos y capacidad, y calcular ocupación = boletos / capacidad. Esto introduce la idea de que un data warehouse tiene varias tablas de hechos que comparten dimensiones (*dimensiones conformadas*).\n\nDurante la puesta en común, pide a un grupo que haya puesto la ocupación en la tabla de boletos que explique cómo la sumaría; el error se hace evidente solo.\n\n## 5. Errores comunes y antipatrones (5 min)\n\n1. **No declarar la granularidad:** mezclar en una misma tabla el total de la factura y el detalle por producto. Resultado: totales duplicados.\n2. **Usar las claves del sistema origen como claves del warehouse:** cuando el ERP cambia o recicla códigos, la historia se rompe.\n3. **Normalizar las dimensiones por costumbre:** traer el diseño 3FN del sistema transaccional y llamarlo \"data warehouse\".\n4. **Meter atributos descriptivos en la tabla de hechos:** nombres de productos o regiones dentro de `fact_ventas` en lugar de en su dimensión.\n5. **Una tabla gigante para todo (*one big table*) sin criterio:** útil en casos puntuales, pero sin granularidad clara reproduce el problema inicial.\n\n## 6. Cierre y verificación (10 min)\n\n### Ronda Feynman (4 min)\n\nEn parejas, cada persona tiene 2 minutos para explicarle a su compañero, como si este fuera del área comercial y no supiera nada de datos, qué es un esquema estrella y por qué la empresa lo necesita. Prohibido usar las palabras \"normalización\" y \"tabla de hechos\".\n\n### Preguntas de verificación (5 min)\n\n1. *Una tienda en línea registra cada clic de los usuarios. ¿Qué granularidad propondrías para analizar el embudo de compra?* Respuesta esperada: una fila por evento de clic (o por sesión, si se analiza a ese nivel), justificando que la granularidad sigue a la pregunta de negocio.\n2. *¿El \"precio de lista\" del producto es una medida o un atributo de dimensión?* Respuesta esperada: atributo de `dim_producto`; la medida es el precio efectivamente pagado en la transacción.\n3. *Tu equipo propone un copo de nieve para ahorrar espacio en BigQuery. ¿Qué respondes?* Respuesta esperada: el ahorro de almacenamiento suele ser irrelevante frente al costo de consultas más complejas y menos usables; la estrella es la opción por defecto.\n4. *¿Por qué una misma `dim_fecha` puede aparecer dos veces en un esquema?* Respuesta esperada: porque cumple distintos roles (fecha de venta, fecha de viaje).\n\n### Idea clave (1 min)\n\n> Los sistemas transaccionales se diseñan para escribir datos sin errores; el modelo dimensional se diseña para que cualquiera pueda leerlos y obtener la misma respuesta.\n\n## Notas para el docente\n\n- **Confusión frecuente:** confundir granularidad con \"nivel de detalle del reporte\". Insiste en que la granularidad es de la tabla, no del reporte: un reporte mensual puede salir de una tabla diaria, pero no al revés.\n- **Pregunta difícil probable:** *\"¿Esto no está obsoleto con los lakehouses?\"* Respuesta: el lakehouse cambia dónde y cómo se almacenan los datos, no la necesidad de un modelo comprensible para el consumo; la capa *gold* suele modelarse dimensionalmente.\n- **Si vas corto de tiempo:** reduce la puesta en común a dos grupos y deja la pregunta 4 como tarea.\n- **Si te sobra tiempo:** introduce las dimensiones lentamente cambiantes (SCD) preguntando qué pasa si un local cambia de región. Es el puente natural a la siguiente clase.\n\n## Para profundizar\n\n- Ralph Kimball y Margy Ross, *The Data Warehouse Toolkit*, 3.ª edición (Wiley). Capítulos 1 a 3.\n- Documentación de Microsoft sobre esquema estrella en Power BI (\"Understand star schema and the importance for Power BI\").\n- Documentación de dbt sobre modelado dimensional y buenas prácticas de estructura de proyectos.\n";
+
+const oscuro = matchMedia("(prefers-color-scheme: dark)").matches;
+mermaid.initialize({ startOnLoad: false, theme: oscuro ? "dark" : "neutral", securityLevel: "strict" });
+
+// Divide la guía en láminas: título + ficha/objetivos, y luego una por cada sección H2.
+const partes = GUIA_MD.split(/^(?=## )/m);
+const laminas = [];
+let portada = partes.shift() || "";
+partes.forEach(p => {
+  const titulo = p.split("\n")[0].replace(/^##\s+/, "").trim();
+  const norm = titulo.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const m = titulo.match(/\((\d+)\s*min/);
+  const docente = norm.includes("docente") || norm.includes("profundizar");
+  if (!m && !docente && laminas.length === 0) { portada += "\n" + p; return; } // ficha, objetivos, agenda
+  laminas.push({ titulo, md: p, minutos: m ? +m[1] : 0, docente });
+});
+laminas.unshift({ titulo: "Inicio", md: portada, minutos: 0, docente: false });
+
+const tituloClase = (portada.match(/^#\s+(.+)$/m) || [, "Clase"])[1];
+document.getElementById("titulo-nav").textContent = tituloClase;
+const totalMin = laminas.reduce((s, l) => s + l.minutos, 0);
+document.getElementById("reloj-total").textContent = `${totalMin} minutos planificados`;
+
+// Renderiza láminas
+const escenario = document.getElementById("escenario");
+laminas.forEach((l, i) => {
+  const el = document.createElement("section");
+  el.className = "lamina" + (l.docente ? " docente" : "");
+  el.id = "lamina-" + i;
+  el.innerHTML = marked.parse(l.md);
+  el.querySelectorAll("pre > code.language-mermaid").forEach(code => {
+    const pre = document.createElement("pre");
+    pre.className = "mermaid";
+    pre.textContent = code.textContent;
+    code.parentElement.replaceWith(pre);
+  });
+  // Subsecciones solo para el docente (p. ej. "Solución de referencia (para el docente)"):
+  // se agrupan y quedan ocultas en la proyección hasta activar las notas.
+  el.querySelectorAll("h3").forEach(h => {
+    const n = h.textContent.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    if (!n.includes("docente") && !n.includes("solucion")) return;
+    const caja = document.createElement("div");
+    caja.className = "docente solo-docente";
+    h.before(caja);
+    let nodo = h;
+    while (nodo && !/^H[1-3]$/.test(nodo.nextElementSibling?.tagName || "H1")) {
+      const sig = nodo.nextElementSibling; caja.appendChild(nodo); nodo = sig;
+    }
+    if (nodo) caja.appendChild(nodo);
+  });
+  l.el = el;
+  escenario.appendChild(el);
+});
+
+// Riel de agenda
+const riel = document.getElementById("riel");
+laminas.forEach((l, i) => {
+  const b = document.createElement("button");
+  b.className = "bloque" + (l.minutos ? "" : " sin-tiempo");
+  b.style.flex = l.minutos ? `${l.minutos} 1 0` : "";
+  b.innerHTML = `<div class="relleno"></div><span>${l.titulo.replace(/\s*\(\d+\s*min\)/, "")}</span>` +
+                (l.minutos ? `<span class="min">${l.minutos} min</span>` : "");
+  b.addEventListener("click", () => mostrar(i));
+  if (l.docente) b.hidden = true;
+  l.boton = b;
+  riel.appendChild(b);
+});
+
+// Cronómetro por bloque (estado en memoria; se conserva al cambiar de lámina)
+const restante = laminas.map(l => l.minutos * 60);
+let actual = 0, intervalo = null;
+const crono = document.getElementById("cronometro");
+const btnIniciar = document.getElementById("iniciar");
+
+function formato(s) {
+  const neg = s < 0, a = Math.abs(s);
+  return (neg ? "+" : "") + String(Math.floor(a / 60)).padStart(2, "0") + ":" + String(a % 60).padStart(2, "0");
+}
+function pintarCrono() {
+  const l = laminas[actual];
+  if (!l.minutos) { crono.textContent = "--:--"; crono.className = "cronometro"; btnIniciar.disabled = true; return; }
+  btnIniciar.disabled = false;
+  const s = restante[actual];
+  crono.textContent = formato(s);
+  crono.className = "cronometro" + (s < 0 ? " excedido" : s <= 60 ? " poco" : "");
+  const usado = Math.min(1, Math.max(0, 1 - s / (l.minutos * 60)));
+  l.boton.querySelector(".relleno").style.width = (usado * 100) + "%";
+}
+function detener() { clearInterval(intervalo); intervalo = null; btnIniciar.textContent = "Iniciar bloque"; }
+btnIniciar.addEventListener("click", () => {
+  if (intervalo) return detener();
+  btnIniciar.textContent = "Pausar";
+  intervalo = setInterval(() => { restante[actual]--; pintarCrono(); }, 1000);
+});
+document.getElementById("reiniciar").addEventListener("click", () => {
+  detener(); restante[actual] = laminas[actual].minutos * 60; pintarCrono();
+});
+
+let verDocente = false;
+document.getElementById("modo-docente").addEventListener("click", e => {
+  verDocente = !verDocente;
+  e.currentTarget.setAttribute("aria-pressed", verDocente);
+  document.body.classList.toggle("ver-docente", verDocente);
+  e.currentTarget.querySelector("span").textContent = verDocente ? "Ocultar notas del docente" : "Mostrar notas del docente";
+  laminas.forEach(l => { if (l.docente) l.boton.hidden = !verDocente; });
+  if (!verDocente && laminas[actual].docente) mostrar(0);
+});
+
+function visibles() { return laminas.map((l, i) => i).filter(i => verDocente || !laminas[i].docente); }
+
+async function mostrar(i) {
+  if (i !== actual) detener();
+  actual = i;
+  laminas.forEach((l, j) => {
+    l.el.classList.toggle("visible", j === i);
+    l.boton.classList.toggle("activo", j === i);
+  });
+  const v = visibles();
+  document.getElementById("posicion").textContent = `${v.indexOf(i) + 1} de ${v.length}`;
+  pintarCrono();
+  escenario.scrollTop = 0;
+  const pendientes = laminas[i].el.querySelectorAll("pre.mermaid:not([data-processed])");
+  if (pendientes.length) { try { await mermaid.run({ nodes: pendientes }); } catch (e) { console.error(e); } }
+}
+function mover(d) { const v = visibles(); const k = v.indexOf(actual) + d; if (k >= 0 && k < v.length) mostrar(v[k]); }
+document.getElementById("anterior").addEventListener("click", () => mover(-1));
+document.getElementById("siguiente").addEventListener("click", () => mover(1));
+document.addEventListener("keydown", e => {
+  if (e.target.closest("button") && (e.key === " " || e.key === "Enter")) return;
+  if (["ArrowRight", "PageDown"].includes(e.key)) mover(1);
+  if (["ArrowLeft", "PageUp"].includes(e.key)) mover(-1);
+  if (e.key === " ") { e.preventDefault(); btnIniciar.click(); }
+});
+mostrar(0);
+</script>
+</body>
+</html>
